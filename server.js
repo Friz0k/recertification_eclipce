@@ -105,13 +105,13 @@ app.post('/api/submit', async (req, res) => {
     content: `<@&${CONFIG.DISCORD_ROLE_ID}>`,
     username: "FIB Security",
     embeds: [{
-      title: "FIB переаттестация",
+      title: "📋 FIB переаттестация",
       color: passed ? 0x00FF00 : 0xFF4444,
       fields: [
-        { name: "Никнейм кто сдавал", value: `${data.nickname} (${data.discordTag})\nРанг: ${data.rank}`, inline: false },
-        { name: "Кол-во набранных баллов", value: `${totalScore} из ${data.questions.length}`, inline: false },
-        { name: "Количество покидание страницы", value: `${data.leaveCount}`, inline: false },
-        { name: "Попытки подглядования", value: `${peekAttempts}`, inline: false }
+        { name: "👤 Никнейм кто сдавал", value: `${data.nickname} (${data.discordTag})\n🏅 Ранг: ${data.rank}`, inline: false },
+        { name: "📊 Кол-во набранных баллов", value: `${totalScore} из ${data.questions.length}`, inline: false },
+        { name: "⚠️ Количество покиданий страницы", value: `${data.leaveCount}`, inline: false },
+        { name: "👀 Попытки подглядывания", value: `${peekAttempts}`, inline: false }
       ],
       timestamp: new Date().toISOString()
     }]
