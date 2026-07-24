@@ -3,18 +3,13 @@ const path = require('path');
 
 const app = express();
 app.use(express.json());
-
-// Раздаем статические файлы (наш сайт) из папки public
 app.use(express.static(path.join(__dirname, 'public')));
 
 const CONFIG = {
   DISCORD_WEBHOOK: 'https://discord.com/api/webhooks/1498677954937487370/PAVXARtu3bSeJodua89uIT8nFAAX1c_8FX0EMxZDMIukD2Y9Mnu_1M5gVMHZ4Vv8gvVW',
-  DISCORD_ROLE_ID: '839596804785176577',
-  PASSING_SCORE: 14,
-  QUESTIONS_PER_TEST: 20
+  DISCORD_ROLE_ID: '839596804785176577'
 };
 
-// ТВОИ ВОПРОСЫ
 const TEST_QUESTIONS = [
   { id: 1, question: "Что, согласно УК, является основным источником уголовного права в штате Сан-Андреас?", options: [{ text: "Конституция штата.", correct: false }, { text: "Судебный Кодекс.", correct: false }, { text: "Уголовный Кодекс.", correct: true }, { text: "Процессуальный Кодекс.", correct: false }], type: "single", points: 1 },
   { id: 2, question: "Какие из перечисленных признаков характеризуют деяние как 'малозначительное' и позволяют освободить от уголовной ответственности?", options: [{ text: "Деяние формально содержит признаки преступления.", correct: true }, { text: "Деяние не представляет общественной опасности.", correct: true }, { text: "Вред, причинённый деянием, является минимальным и несущественным.", correct: true }, { text: "Деяние совершено впервые.", correct: false }], type: "multiple", points: 1 },
@@ -54,7 +49,6 @@ const TEST_QUESTIONS = [
   { id: 35, question: "Какой из перечисленных органов имеет право действовать на всей территории штата без оповещения о пересечении границ юрисдикции?", options: [{ text: "Только LSPD в своей зоне.", correct: false }, { text: "Только LSSD и SANG в своих зонах.", correct: false }, { text: "USSS, Прокуратура Штата и FIB.", correct: true }, { text: "Все государственные структуры в любое время.", correct: false }], type: "single", points: 1 }
 ];
 
-// Функция отправки в Discord
 async function sendToDiscord(payload) {
   try {
     await fetch(CONFIG.DISCORD_WEBHOOK, {
@@ -62,50 +56,28 @@ async function sendToDiscord(payload) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-  } catch (error) {
-    console.error('Ошибка отправки в Discord:', error);
-  }
+  } catch (error) {}
 }
 
-// 1. Получение вопросов
 app.get('/api/questions', (req, res) => {
+  const rank = parseInt(req.query.rank) || 3;
+  const questionsCount = rank === 7 ? 20 : 10;
+  
   const shuffled = [...TEST_QUESTIONS].sort(() => 0.5 - Math.random());
-  const selected = shuffled.slice(0, CONFIG.QUESTIONS_PER_TEST);
+  const selected = shuffled.slice(0, questionsCount);
   
   const forClient = selected.map(q => ({
     id: q.id, question: q.question, type: q.type, points: q.points,
-    options: q.options.map(o => ({ text: o.text })) // Убираем флаг correct
+    options: q.options.map(o => ({ text: o.text }))
   }));
   
   res.json({ success: true, questions: forClient });
 });
 
-// 2. Аларм античита
-app.post('/api/cheat-alert', async (req, res) => {
-  const { nickname, discordTag, reason } = req.body;
-  const payload = {
-    content: `<@&${CONFIG.DISCORD_ROLE_ID}> 🚨 **АНТИЧИТ АЛАРМ**`,
-    username: "FIB Security",
-    embeds: [{
-      color: 0xFFA500,
-      title: "⚠️ Подозрительная активность",
-      fields: [
-        { name: "👤 Игрок", value: `${nickname} (${discordTag})`, inline: true },
-        { name: "🔍 Нарушение", value: reason, inline: false }
-      ],
-      timestamp: new Date().toISOString()
-    }]
-  };
-  
-  await sendToDiscord(payload);
-  res.json({ success: true });
-});
-
-// 3. Отправка результатов
 app.post('/api/submit', async (req, res) => {
   const data = req.body;
   let totalScore = 0;
-  let fastAnswersCount = 0;
+  let peekAttempts = 0;
   
   data.questions.forEach((userQ, i) => {
     const orig = TEST_QUESTIONS.find(q => q.id === userQ.id);
@@ -124,23 +96,22 @@ app.post('/api/submit', async (req, res) => {
     }
     
     if (isCorrect) totalScore += orig.points;
-    if (data.questionTimes && data.questionTimes[i] < 3) fastAnswersCount++;
+    if (data.questionTimes && data.questionTimes[i] > 60) peekAttempts++;
   });
 
-  const passed = totalScore >= CONFIG.PASSING_SCORE;
-  const cheatWarning = fastAnswersCount >= 3 
-    ? `\n\n⚠️ **Подозрение на читы:** ${fastAnswersCount} отв. даны быстрее 3 секунд.` 
-    : "";
+  const passed = totalScore >= (data.questions.length * 0.7);
 
   const payload = {
     content: `<@&${CONFIG.DISCORD_ROLE_ID}>`,
-    username: "FIB Переаттестация",
+    username: "FIB Security",
     embeds: [{
+      title: "FIB переаттестация",
       color: passed ? 0x00FF00 : 0xFF4444,
       fields: [
-        { name: "🎮 Discord", value: data.discordTag, inline: true },
-        { name: "👤 Ник", value: data.nickname, inline: true },
-        { name: "📊 Результат", value: `${totalScore}/${data.questions.length}${cheatWarning}`, inline: false }
+        { name: "Никнейм кто сдавал", value: `${data.nickname} (${data.discordTag})\nРанг: ${data.rank}`, inline: false },
+        { name: "Кол-во набранных баллов", value: `${totalScore} из ${data.questions.length}`, inline: false },
+        { name: "Количество покидание страницы", value: `${data.leaveCount}`, inline: false },
+        { name: "Попытки подглядования", value: `${peekAttempts}`, inline: false }
       ],
       timestamp: new Date().toISOString()
     }]
@@ -150,8 +121,5 @@ app.post('/api/submit', async (req, res) => {
   res.json({ success: true, score: totalScore });
 });
 
-// Старт сервера
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
-});
+app.listen(PORT, () => {});
